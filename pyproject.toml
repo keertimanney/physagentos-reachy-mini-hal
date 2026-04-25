@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "physagentos-reachy-mini-hal"
-version = "0.0.1"
+version = "0.0.2"
 description = "physagentOS HAL driver for the Pollen Robotics Reachy Mini robot"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "reachy_mini>=1.7.0",
+    "reachy_mini>=1.5.1",
     "numpy>=2.0",
 ]
 

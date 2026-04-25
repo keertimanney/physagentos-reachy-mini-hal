@@ -21,10 +21,24 @@ class ReachyMiniDriver:
     Wraps `reachy_mini.ReachyMini` so the SDK's safety clamps and Stewart-platform
     inverse kinematics carry through to physagentOS agents. The driver is itself a
     context manager and forwards lifecycle to the SDK.
+
+    Tested against `reachy_mini==1.5.1`. Antenna list ordering on the wire is
+    `[right, left]` per `reachy_mini.io.protocol`; the `AntennaTargets` dataclass
+    hides this so callers address antennas by side.
     """
 
-    def __init__(self, sdk_factory: Any | None = None) -> None:
+    def __init__(
+        self,
+        sdk_factory: Any | None = None,
+        *,
+        spawn_daemon: bool = False,
+        connection_mode: str = "auto",
+        timeout: float = 5.0,
+    ) -> None:
         self._sdk_factory = sdk_factory
+        self._spawn_daemon = spawn_daemon
+        self._connection_mode = connection_mode
+        self._timeout = timeout
         self._mini: ReachyMini | None = None
         self._state: RobotState = RobotState.DISCONNECTED
 
@@ -40,7 +54,11 @@ class ReachyMiniDriver:
             else:
                 from reachy_mini import ReachyMini
 
-                self._mini = ReachyMini()
+                self._mini = ReachyMini(
+                    spawn_daemon=self._spawn_daemon,
+                    connection_mode=self._connection_mode,
+                    timeout=self._timeout,
+                )
             if hasattr(self._mini, "__enter__"):
                 self._mini.__enter__()
             self._state = RobotState.READY
@@ -68,6 +86,12 @@ class ReachyMiniDriver:
     def __exit__(self, exc_type, exc, tb) -> None:
         self.disconnect()
 
+    def wake_up(self) -> None:
+        self._sdk.wake_up()
+
+    def sleep(self) -> None:
+        self._sdk.goto_sleep()
+
     # --- Head --------------------------------------------------------------
 
     def head_goto(
@@ -76,57 +100,38 @@ class ReachyMiniDriver:
         duration: float,
         interpolation: Interpolation = "minjerk",
     ) -> None:
-        target = self._head_pose_to_sdk(pose)
-        self._sdk.goto_target(target, duration=duration, interpolation=interpolation)
+        method = self._interp_to_enum(interpolation)
+        self._sdk.goto_target(head=pose.to_matrix(), duration=duration, method=method)
 
     def head_set(self, pose: HeadPose) -> None:
-        target = self._head_pose_to_sdk(pose)
-        self._sdk.set_target(target)
+        self._sdk.set_target_head_pose(pose.to_matrix())
 
-    def head_read(self) -> HeadPose:
-        current = self._sdk.get_current_pose()
-        return HeadPose(
-            x=float(current.get("x", 0.0)),
-            y=float(current.get("y", 0.0)),
-            z=float(current.get("z", 0.0)),
-            roll=float(current.get("roll", 0.0)),
-            pitch=float(current.get("pitch", 0.0)),
-            yaw=float(current.get("yaw", 0.0)),
-        )
+    def head_read(self) -> np.ndarray:
+        return np.asarray(self._sdk.get_current_head_pose())
 
     # --- Body --------------------------------------------------------------
 
     def body_goto(self, yaw: float, duration: float) -> None:
-        self._sdk.goto_target({"body_rotation": yaw}, duration=duration)
+        self._sdk.goto_target(body_yaw=yaw, duration=duration)
 
     def body_set(self, yaw: float) -> None:
-        self._sdk.set_target({"body_rotation": yaw})
-
-    def body_read(self) -> float:
-        return float(self._sdk.get_current_pose().get("body_rotation", 0.0))
+        self._sdk.set_target_body_yaw(yaw)
 
     # --- Antennas ----------------------------------------------------------
 
     def antennas_goto(self, targets: AntennaTargets, duration: float) -> None:
-        self._sdk.goto_target(
-            {"left_antenna": targets.left, "right_antenna": targets.right},
-            duration=duration,
-        )
+        self._sdk.goto_target(antennas=targets.to_sdk_list(), duration=duration)
 
     def antennas_set(self, targets: AntennaTargets) -> None:
-        self._sdk.set_target(
-            {"left_antenna": targets.left, "right_antenna": targets.right}
-        )
+        self._sdk.set_target_antenna_joint_positions(targets.to_sdk_list())
 
-    def button_pressed(self, side: str) -> bool:
-        if side not in ("left", "right"):
-            raise ValueError(f"side must be 'left' or 'right', got {side!r}")
-        return bool(self._sdk.is_button_pressed(f"{side}_antenna"))
+    def antennas_read(self) -> AntennaTargets:
+        return AntennaTargets.from_sdk_list(list(self._sdk.get_present_antenna_joint_positions()))
 
     # --- Vision ------------------------------------------------------------
 
     def read_camera_frame(self) -> np.ndarray:
-        frame = self._sdk.get_camera_frame()
+        frame = self._sdk.media.get_frame()
         return np.asarray(frame)
 
     # --- Recorded moves ----------------------------------------------------
@@ -146,12 +151,7 @@ class ReachyMiniDriver:
         return self._mini
 
     @staticmethod
-    def _head_pose_to_sdk(pose: HeadPose) -> dict[str, float]:
-        return {
-            "x": pose.x,
-            "y": pose.y,
-            "z": pose.z,
-            "roll": pose.roll,
-            "pitch": pose.pitch,
-            "yaw": pose.yaw,
-        }
+    def _interp_to_enum(interpolation: Interpolation) -> Any:
+        from reachy_mini.utils.interpolation import InterpolationTechnique
+
+        return InterpolationTechnique(interpolation)

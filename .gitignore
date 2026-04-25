@@ -20,3 +20,6 @@ htmlcov/
 *.swp
 .DS_Store
 uv.lock
+scripts/smoke_test.log
+scripts/smoke_frame.png
+scripts/smoke_frame.npy
