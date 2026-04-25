@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "physagentos-reachy-mini-hal"
+version = "0.0.1"
+description = "physagentOS HAL driver for the Pollen Robotics Reachy Mini robot"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+authors = [{ name = "keertimanney" }]
+keywords = ["robotics", "reachy", "hal", "physagentos", "pollen-robotics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "reachy_mini>=1.7.0",
+    "numpy>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[project.urls]
+Homepage = "https://github.com/keertimanney/physagentos-reachy-mini-hal"
+Issues = "https://github.com/keertimanney/physagentos-reachy-mini-hal/issues"
+Upstream = "https://github.com/pollen-robotics/reachy_mini"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/physagentos_reachy_mini_hal"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
