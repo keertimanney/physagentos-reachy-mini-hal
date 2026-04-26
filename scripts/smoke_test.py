@@ -14,7 +14,6 @@ Run:
 
 from __future__ import annotations
 
-import socket
 import sys
 import time
 from pathlib import Path
@@ -24,8 +23,8 @@ import numpy as np
 from physagentos_reachy_mini_hal import (
     AntennaTargets,
     HeadPose,
-    ReachyMiniDriver,
     RobotState,
+    connect_with_fallback,
 )
 
 # Tuned-down motion parameters
@@ -40,48 +39,8 @@ def section(title: str) -> None:
     print(f"\n=== {title} ===", flush=True)
 
 
-def _wait_for_port(host: str, port: int, timeout: float) -> bool:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection((host, port), timeout=1.0):
-                return True
-        except OSError:
-            time.sleep(0.5)
-    return False
-
-
-def connect_with_fallback() -> ReachyMiniDriver:
-    """Try the existing daemon first; spawn one and wait for port if nothing is listening."""
-    section("Connecting (try existing daemon, fall back to spawning)")
-    driver = ReachyMiniDriver(spawn_daemon=False, timeout=3.0)
-    try:
-        driver.connect()
-        print("connected to existing daemon", flush=True)
-        return driver
-    except Exception as e:
-        print(f"no existing daemon ({type(e).__name__}); spawning one...", flush=True)
-
-    # Trigger a daemon spawn. The SDK constructor will likely raise before the
-    # daemon is actually ready, but the subprocess is launched.
-    try:
-        ReachyMiniDriver(spawn_daemon=True, timeout=3.0).connect()
-    except Exception:
-        pass
-
-    # Wait for port :8000 to accept connections — daemon takes ~10-15s to fully boot.
-    print("waiting for daemon to be ready on :8000 (up to 60s)...", flush=True)
-    if not _wait_for_port("127.0.0.1", 8000, timeout=60.0):
-        raise RuntimeError("daemon did not become ready within 60s")
-
-    # Reconnect against the now-ready daemon.
-    driver = ReachyMiniDriver(spawn_daemon=False, timeout=10.0)
-    driver.connect()
-    print("spawned new daemon and connected", flush=True)
-    return driver
-
-
 def main() -> int:
+    section("Connecting (try existing daemon, fall back to spawning)")
     try:
         driver = connect_with_fallback()
     except Exception as e:
